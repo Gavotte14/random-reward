@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#f6f3ee" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
   <title>Random Reward</title>
   <style>
     :root {
@@ -939,6 +941,16 @@ document.getElementById("clearBtn").addEventListener("click", () => {
   resultTextEl.textContent = "记录已清空。";
   render();
 });
+
+
+// PWA: 注册 Service Worker，提供离线启动和静态资源缓存。
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch(err => {
+      console.warn("Service Worker 注册失败：", err);
+    });
+  });
+}
 
 render();
 initializeMotion();
