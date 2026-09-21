@@ -2,40 +2,19 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, viewport-fit=cover"
-  />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#f6f3ee" />
-
   <title>Random Reward</title>
-
   <style>
     :root {
-      font-family:
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
-
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: #1f2328;
       background: #f6f3ee;
     }
 
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-    }
-
-    button,
-    input {
-      font: inherit;
-    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    button, input, textarea { font: inherit; }
 
     .wrap {
       width: min(720px, 100%);
@@ -51,15 +30,8 @@
       box-shadow: 0 10px 28px rgba(0, 0, 0, 0.05);
     }
 
-    h1 {
-      font-size: 1.35rem;
-      margin: 0 0 4px;
-    }
-
-    .muted {
-      color: #6f746f;
-      font-size: 0.92rem;
-    }
+    h1 { font-size: 1.35rem; margin: 0 0 4px; }
+    .muted { color: #6f746f; font-size: 0.92rem; }
 
     .stats {
       display: grid;
@@ -85,34 +57,42 @@
       display: grid;
       place-items: center;
       text-align: center;
-
       border: 2px dashed #ded8cf;
       border-radius: 20px;
-
       margin: 12px 0 18px;
       padding: 18px;
+      overflow: hidden;
     }
 
     #score {
       font-size: clamp(3.8rem, 16vw, 6rem);
       font-weight: 800;
       line-height: 1;
+      font-variant-numeric: tabular-nums;
     }
 
-    #resultText {
-      margin-top: 8px;
-      color: #6f746f;
+    #score.rolling {
+      animation: flicker 0.18s linear infinite alternate;
     }
 
-    .section {
-      margin-top: 18px;
+    #score.pop {
+      animation: pop 0.28s ease-out;
     }
 
-    .label {
-      font-size: 0.88rem;
-      color: #6f746f;
-      margin-bottom: 8px;
+    @keyframes flicker {
+      from { transform: translateY(-2px) scale(0.98); opacity: 0.65; }
+      to { transform: translateY(2px) scale(1.02); opacity: 1; }
     }
+
+    @keyframes pop {
+      0% { transform: scale(0.82); }
+      65% { transform: scale(1.12); }
+      100% { transform: scale(1); }
+    }
+
+    #resultText { margin-top: 8px; color: #6f746f; }
+    .section { margin-top: 18px; }
+    .label { font-size: 0.88rem; color: #6f746f; margin-bottom: 8px; }
 
     .seg {
       display: flex;
@@ -121,7 +101,8 @@
     }
 
     .seg button,
-    .action {
+    .action,
+    .note-action {
       border: 1px solid #d8d2c8;
       background: white;
       border-radius: 999px;
@@ -135,7 +116,9 @@
       border-color: #1f2328;
     }
 
-    .seg button:disabled {
+    .seg button:disabled,
+    .action:disabled,
+    .note-action:disabled {
       opacity: 0.38;
       cursor: not-allowed;
     }
@@ -147,15 +130,39 @@
       margin-top: 10px;
     }
 
-    .custom.show {
-      display: grid;
-    }
+    .custom.show { display: grid; }
 
-    .custom input {
+    .custom input,
+    textarea {
       width: 100%;
       padding: 11px 12px;
       border-radius: 12px;
       border: 1px solid #d8d2c8;
+      background: white;
+      color: inherit;
+    }
+
+    textarea {
+      min-height: 82px;
+      resize: vertical;
+    }
+
+    .note-tools {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .note-action {
+      padding: 8px 11px;
+      font-size: 0.86rem;
+    }
+
+    .note-hint {
+      color: #888;
+      font-size: 0.8rem;
     }
 
     .big-actions {
@@ -177,10 +184,6 @@
       border-color: #1f2328;
     }
 
-    .action.full {
-      grid-column: 1 / -1;
-    }
-
     .history-head {
       display: flex;
       justify-content: space-between;
@@ -197,26 +200,23 @@
       display: grid;
       grid-template-columns: 84px 1fr auto;
       gap: 10px;
-      align-items: center;
-
+      align-items: start;
       padding: 12px 2px;
       border-bottom: 1px solid #eeeae4;
     }
 
-    .entry-score {
-      font-size: 1.15rem;
-      font-weight: 750;
+    .entry-score { font-size: 1.15rem; font-weight: 750; }
+    .entry-meta { color: #6f746f; font-size: 0.86rem; }
+
+    .entry-note {
+      margin-top: 5px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.9rem;
+      line-height: 1.45;
     }
 
-    .entry-meta {
-      color: #6f746f;
-      font-size: 0.86rem;
-    }
-
-    .tiny {
-      font-size: 0.8rem;
-      color: #888;
-    }
+    .tiny { font-size: 0.8rem; color: #888; }
 
     .tools {
       display: flex;
@@ -234,1188 +234,659 @@
       cursor: pointer;
     }
 
-    #importFile {
-      display: none;
-    }
+    #importFile { display: none; }
 
     @media (max-width: 480px) {
-      .big-actions {
-        grid-template-columns: 1fr;
-      }
-
-      .action.full {
-        grid-column: auto;
-      }
-
-      .entry {
-        grid-template-columns: 72px 1fr;
-      }
-
-      .entry-time {
-        grid-column: 2;
-      }
+      .big-actions { grid-template-columns: 1fr; }
+      .entry { grid-template-columns: 72px 1fr; }
+      .entry-time { grid-column: 2; }
     }
   </style>
 </head>
 
 <body>
-
   <main class="wrap">
-
     <section class="card">
-
       <h1>Random Reward</h1>
-
-      <div class="muted">
-        奖励“开始行动”，而不是奖励完美结果。
-      </div>
-
+      <div class="muted">奖励“开始行动”，而不是奖励完美结果。</div>
 
       <div class="stats">
-
         <div class="stat">
           <span class="muted">今日积分</span>
           <strong id="todayTotal">0</strong>
         </div>
-
         <div class="stat">
           <span class="muted">累计积分</span>
           <strong id="allTotal">0</strong>
         </div>
-
       </div>
-
 
       <div class="result">
-
         <div>
-
-          <div id="score">
-            --
-          </div>
-
-          <div id="resultText">
-            选好类型和范围，然后摇一摇或点按钮。
-          </div>
-
+          <div id="score">--</div>
+          <div id="resultText">选好类型和范围，然后摇一摇或点按钮。</div>
         </div>
-
       </div>
 
-
       <div class="section">
-
-        <div class="label">
-          正向 / 负向
-        </div>
-
+        <div class="label">正向 / 负向</div>
         <div class="seg" id="signGroup">
-
-          <button
-            data-sign="positive"
-            class="active">
-            ＋ 正向
-          </button>
-
-          <button
-            data-sign="negative">
-            － 负向
-          </button>
-
+          <button data-sign="positive" class="active">＋ 正向</button>
+          <button data-sign="negative">－ 负向</button>
         </div>
-
       </div>
 
-
       <div class="section">
-
-        <div class="label">
-          事件类型
-          <span id="typeHint"></span>
-        </div>
-
+        <div class="label">事件类型 <span id="typeHint"></span></div>
         <div class="seg" id="typeGroup">
-
-          <button
-            data-type="start"
-            class="active">
-            开始
-          </button>
-
-          <button data-type="end">
-            结束
-          </button>
-
-          <button data-type="habit">
-            习惯
-          </button>
-
+          <button data-type="start" class="active">开始</button>
+          <button data-type="end">结束</button>
+          <button data-type="habit">习惯</button>
         </div>
-
       </div>
 
-
       <div class="section">
-
-        <div class="label">
-          随机范围
-        </div>
-
+        <div class="label">随机范围</div>
         <div class="seg" id="rangeGroup">
-
-          <button
-            data-min="1"
-            data-max="50"
-            class="active">
-            1–50
-          </button>
-
-          <button
-            data-min="100"
-            data-max="300">
-            100–300
-          </button>
-
-          <button data-custom="true">
-            自定义
-          </button>
-
+          <button data-min="1" data-max="50" class="active">1–50</button>
+          <button data-min="100" data-max="300">100–300</button>
+          <button data-custom="true">自定义</button>
         </div>
-
 
         <div class="custom" id="customRange">
-
-          <input
-            id="customMin"
-            type="number"
-            inputmode="numeric"
-            value="1"
-            placeholder="最小值"
-          />
-
-          <input
-            id="customMax"
-            type="number"
-            inputmode="numeric"
-            value="50"
-            placeholder="最大值"
-          />
-
+          <input id="customMin" type="number" inputmode="numeric" value="1" placeholder="最小值" />
+          <input id="customMax" type="number" inputmode="numeric" value="50" placeholder="最大值" />
         </div>
-
       </div>
 
+      <div class="section">
+        <div class="label">备注（可选）</div>
+        <textarea id="noteInput" maxlength="500" placeholder="例如：开始看 BRD8 文献 / 今天 23:30 前睡觉"></textarea>
+        <div class="note-tools">
+          <button class="note-action" id="saveLastNoteBtn">补充到上一次记录</button>
+          <span class="note-hint" id="noteHint">直接抽奖时，这里的文字会自动保存到本次记录。</span>
+        </div>
+      </div>
 
       <div class="big-actions">
-
-        <button
-          class="action primary"
-          id="rollBtn">
-          🎲 抽一次
-        </button>
-
-        <button
-          class="action"
-          id="motionBtn">
-          📱 启用摇一摇
-        </button>
-
+        <button class="action primary" id="rollBtn">🎲 抽一次</button>
+        <button class="action" id="motionBtn">📱 摇一摇：准备中</button>
       </div>
-
 
       <div class="history-head">
-
         <div>
-
-          <strong>
-            最近记录
-          </strong>
-
-          <div class="tiny">
-            仅保存在当前浏览器中
-          </div>
-
+          <strong>最近记录</strong>
+          <div class="tiny">仅保存在当前浏览器中</div>
         </div>
-
       </div>
 
-
-      <div
-        class="history"
-        id="history">
-      </div>
-
+      <div class="history" id="history"></div>
 
       <div class="tools">
-
-        <button id="exportBtn">
-          导出 JSON
-        </button>
-
-        <label for="importFile">
-          导入 JSON
-        </label>
-
-        <input
-          id="importFile"
-          type="file"
-          accept="application/json,.json"
-        />
-
-        <button id="clearBtn">
-          清空记录
-        </button>
-
+        <button id="exportBtn">导出 JSON</button>
+        <label for="importFile">导入 JSON</label>
+        <input id="importFile" type="file" accept="application/json,.json" />
+        <button id="clearBtn">清空记录</button>
       </div>
-
     </section>
-
   </main>
 
-
 <script>
+const STORAGE_KEY = "randomRewardRecordsV1";
+const SETTINGS_KEY = "randomRewardSettingsV1";
 
-const STORAGE_KEY =
-  "randomRewardRecordsV1";
+function loadSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
 
+const savedSettings = loadSettings();
 
 const state = {
-
   sign: "positive",
-
   type: "start",
-
   min: 1,
-
   max: 50,
-
   custom: false,
+  isRolling: false,
 
-  motionEnabled: false,
-
+  // V1.1：首次使用默认希望开启摇一摇。
+  motionWanted: savedSettings.motionWanted ?? true,
+  motionActive: false,
+  motionPermissionNeeded: false,
   lastShakeAt: 0,
-
   lastMotion: null
 };
 
+let records = loadRecords();
 
-let records =
-  loadRecords();
-
-
-
-const scoreEl =
-  document.getElementById("score");
-
-const resultTextEl =
-  document.getElementById("resultText");
-
-const todayTotalEl =
-  document.getElementById("todayTotal");
-
-const allTotalEl =
-  document.getElementById("allTotal");
-
-const historyEl =
-  document.getElementById("history");
-
-const typeHintEl =
-  document.getElementById("typeHint");
-
-const customRangeEl =
-  document.getElementById("customRange");
-
-const customMinEl =
-  document.getElementById("customMin");
-
-const customMaxEl =
-  document.getElementById("customMax");
-
-const motionBtn =
-  document.getElementById("motionBtn");
-
-
+const scoreEl = document.getElementById("score");
+const resultTextEl = document.getElementById("resultText");
+const todayTotalEl = document.getElementById("todayTotal");
+const allTotalEl = document.getElementById("allTotal");
+const historyEl = document.getElementById("history");
+const typeHintEl = document.getElementById("typeHint");
+const customRangeEl = document.getElementById("customRange");
+const customMinEl = document.getElementById("customMin");
+const customMaxEl = document.getElementById("customMax");
+const motionBtn = document.getElementById("motionBtn");
+const rollBtn = document.getElementById("rollBtn");
+const noteInputEl = document.getElementById("noteInput");
+const noteHintEl = document.getElementById("noteHint");
+const saveLastNoteBtn = document.getElementById("saveLastNoteBtn");
 
 function loadRecords() {
-
   try {
-
-    const saved =
-      JSON.parse(
-        localStorage.getItem(STORAGE_KEY)
-        || "[]"
-      );
-
-    return Array.isArray(saved)
-      ? saved
-      : [];
-
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    return Array.isArray(saved) ? saved : [];
   } catch {
-
     return [];
-
   }
-
 }
-
-
 
 function saveRecords() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
 
+function saveSettings() {
   localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(records)
+    SETTINGS_KEY,
+    JSON.stringify({ motionWanted: state.motionWanted })
   );
-
 }
 
-
-
-function localDateKey(
-  date = new Date()
-) {
-
-  const y =
-    date.getFullYear();
-
-  const m =
-    String(
-      date.getMonth() + 1
-    ).padStart(2, "0");
-
-  const d =
-    String(
-      date.getDate()
-    ).padStart(2, "0");
-
+function localDateKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
-
 }
-
-
 
 function signed(n) {
-
-  return n > 0
-    ? `+${n}`
-    : String(n);
-
+  return n > 0 ? `+${n}` : String(n);
 }
 
-
-
 function typeName(type) {
-
   return ({
     start: "开始",
     end: "结束",
     habit: "习惯",
     negative: "负向"
   })[type] || type;
-
 }
 
-
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
 function currentRange() {
-
   let min = state.min;
-
   let max = state.max;
 
-
   if (state.custom) {
-
-    min =
-      Math.trunc(
-        Number(customMinEl.value)
-      );
-
-    max =
-      Math.trunc(
-        Number(customMaxEl.value)
-      );
-
+    min = Math.trunc(Number(customMinEl.value));
+    max = Math.trunc(Number(customMaxEl.value));
   }
-
 
   if (
-    !Number.isFinite(min)
-    ||
-    !Number.isFinite(max)
-    ||
-    min < 0
-    ||
-    max < 0
-    ||
+    !Number.isFinite(min) ||
+    !Number.isFinite(max) ||
+    min < 0 ||
+    max < 0 ||
     min > max
   ) {
-
-    throw new Error(
-      "请输入有效范围。"
-    );
-
+    throw new Error("请输入有效范围。");
   }
 
-
-  return {
-    min,
-    max
-  };
-
+  return { min, max };
 }
 
-
-
-function randomIntInclusive(
-  min,
-  max
-) {
-
-  return (
-    Math.floor(
-      Math.random()
-      *
-      (max - min + 1)
-    )
-    +
-    min
-  );
-
+function randomIntInclusive(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
+async function animateNumber(range) {
+  scoreEl.classList.remove("pop");
+  scoreEl.classList.add("rolling");
+  resultTextEl.textContent = "正在抽取……";
 
-function roll(
-  source = "button"
-) {
+  const steps = 12;
+
+  for (let i = 0; i < steps; i++) {
+    const raw = randomIntInclusive(range.min, range.max);
+    const preview = state.sign === "negative" ? -raw : raw;
+    scoreEl.textContent = signed(preview);
+
+    // 前面快一点，最后几下稍微放慢。
+    await sleep(45 + i * 5);
+  }
+
+  scoreEl.classList.remove("rolling");
+}
+
+async function roll(source = "button") {
+  if (state.isRolling) return;
 
   let range;
 
-
   try {
-
-    range =
-      currentRange();
-
+    range = currentRange();
   } catch (err) {
-
-    resultTextEl.textContent =
-      err.message;
-
+    resultTextEl.textContent = err.message;
     return;
-
   }
 
+  state.isRolling = true;
+  rollBtn.disabled = true;
 
-  const raw =
-    randomIntInclusive(
-      range.min,
-      range.max
-    );
+  // 抽奖前先把备注“拍照”下来，避免动画期间修改造成混乱。
+  const note = noteInputEl.value.trim();
 
+  await animateNumber(range);
 
-  const value =
-    state.sign === "negative"
-      ? -raw
-      : raw;
-
-
-  const type =
-    state.sign === "negative"
-      ? "negative"
-      : state.type;
-
-
-  const now =
-    new Date();
-
+  const raw = randomIntInclusive(range.min, range.max);
+  const value = state.sign === "negative" ? -raw : raw;
+  const type = state.sign === "negative" ? "negative" : state.type;
+  const now = new Date();
 
   const record = {
-
-    id:
-      crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random()}`,
-
-    timestamp:
-      now.toISOString(),
-
-    localDate:
-      localDateKey(now),
-
-    sign:
-      state.sign,
-
+    id: crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`,
+    timestamp: now.toISOString(),
+    localDate: localDateKey(now),
+    sign: state.sign,
     type,
-
-    min:
-      range.min,
-
-    max:
-      range.max,
-
+    min: range.min,
+    max: range.max,
     value,
-
-    source
+    source,
+    note
   };
-
 
   records.push(record);
-
   saveRecords();
 
+  scoreEl.textContent = signed(value);
+  resultTextEl.textContent = note
+    ? `${typeName(type)} · ${range.min}–${range.max} · 已保存备注`
+    : `${typeName(type)} · ${range.min}–${range.max}`;
 
-  scoreEl.textContent =
-    signed(value);
+  scoreEl.classList.remove("pop");
+  void scoreEl.offsetWidth;
+  scoreEl.classList.add("pop");
 
-
-  resultTextEl.textContent =
-    `${typeName(type)} · ${range.min}–${range.max}`;
-
+  if (note) {
+    noteInputEl.value = "";
+    noteHintEl.textContent = "备注已随本次记录保存。也可以继续输入，再补充到上一次记录。";
+  } else {
+    noteHintEl.textContent = "如果刚刚才想到备注，可以现在输入，再点“补充到上一次记录”。";
+  }
 
   if (navigator.vibrate) {
-
     navigator.vibrate(45);
-
   }
 
-
+  state.isRolling = false;
+  rollBtn.disabled = false;
   render();
-
 }
 
+function getLatestRecord() {
+  if (!records.length) return null;
 
+  return records.reduce((latest, current) => {
+    if (!latest) return current;
+    return new Date(current.timestamp) > new Date(latest.timestamp)
+      ? current
+      : latest;
+  }, null);
+}
 
 function render() {
+  const today = localDateKey();
 
-  const today =
-    localDateKey();
+  const todayTotal = records
+    .filter(r => r.localDate === today)
+    .reduce((sum, r) => sum + Number(r.value || 0), 0);
 
+  const allTotal = records.reduce(
+    (sum, r) => sum + Number(r.value || 0),
+    0
+  );
 
-  const todayTotal =
+  todayTotalEl.textContent = todayTotal === 0 ? "0" : signed(todayTotal);
+  allTotalEl.textContent = allTotal === 0 ? "0" : signed(allTotal);
 
-    records
+  saveLastNoteBtn.disabled = records.length === 0;
 
-      .filter(
-        r =>
-          r.localDate === today
-      )
-
-      .reduce(
-        (sum, r) =>
-          sum + Number(r.value || 0),
-        0
-      );
-
-
-  const allTotal =
-
-    records.reduce(
-
-      (sum, r) =>
-        sum + Number(r.value || 0),
-
-      0
-    );
-
-
-  todayTotalEl.textContent =
-    todayTotal === 0
-      ? "0"
-      : signed(todayTotal);
-
-
-  allTotalEl.textContent =
-    allTotal === 0
-      ? "0"
-      : signed(allTotal);
-
-
-  const latest =
-
-    [...records]
-
-      .sort(
-        (a, b) =>
-          new Date(b.timestamp)
-          -
-          new Date(a.timestamp)
-      )
-
-      .slice(0, 20);
-
+  const latest = [...records]
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .slice(0, 20);
 
   if (!latest.length) {
-
-    historyEl.innerHTML =
-      `
+    historyEl.innerHTML = `
       <div class="muted">
-        还没有记录。
-        第一次抽奖会出现在这里。
+        还没有记录。第一次抽奖会出现在这里。
       </div>
-      `;
-
+    `;
     return;
-
   }
 
+  historyEl.innerHTML = latest
+    .map(r => {
+      const dt = new Date(r.timestamp);
+      const time = dt.toLocaleString("zh-CN", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      });
 
-  historyEl.innerHTML =
+      const noteHTML = r.note
+        ? `<div class="entry-note">${escapeHTML(r.note)}</div>`
+        : "";
 
-    latest
-
-      .map(r => {
-
-        const dt =
-          new Date(r.timestamp);
-
-
-        const time =
-          dt.toLocaleString(
-            "zh-CN",
-            {
-              month: "2-digit",
-              day: "2-digit",
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: false
-            }
-          );
-
-
-        return `
-
-          <div class="entry">
-
-            <div class="entry-score">
-              ${signed(Number(r.value))}
-            </div>
-
-            <div>
-
-              <div>
-                ${typeName(r.type)}
-              </div>
-
-              <div class="entry-meta">
-                范围 ${r.min}–${r.max}
-              </div>
-
-            </div>
-
-            <div class="entry-meta entry-time">
-              ${time}
-            </div>
-
+      return `
+        <div class="entry">
+          <div class="entry-score">${signed(Number(r.value))}</div>
+          <div>
+            <div>${typeName(r.type)}</div>
+            <div class="entry-meta">范围 ${r.min}–${r.max}</div>
+            ${noteHTML}
           </div>
-
-        `;
-
-      })
-
-      .join("");
-
+          <div class="entry-meta entry-time">${time}</div>
+        </div>
+      `;
+    })
+    .join("");
 }
 
+document.getElementById("signGroup").addEventListener("click", e => {
+  const btn = e.target.closest("button[data-sign]");
+  if (!btn) return;
 
+  state.sign = btn.dataset.sign;
 
-document
-  .getElementById("signGroup")
-  .addEventListener(
-    "click",
-    e => {
+  document.querySelectorAll("[data-sign]").forEach(b => {
+    b.classList.toggle("active", b === btn);
+  });
 
-      const btn =
-        e.target.closest(
-          "button[data-sign]"
-        );
+  const negative = state.sign === "negative";
 
+  document.querySelectorAll("#typeGroup button").forEach(b => {
+    b.disabled = negative;
+  });
 
-      if (!btn) return;
+  typeHintEl.textContent = negative ? "（负向事件不区分类型）" : "";
+});
 
+document.getElementById("typeGroup").addEventListener("click", e => {
+  const btn = e.target.closest("button[data-type]");
+  if (!btn || btn.disabled) return;
 
-      state.sign =
-        btn.dataset.sign;
+  state.type = btn.dataset.type;
 
+  document.querySelectorAll("[data-type]").forEach(b => {
+    b.classList.toggle("active", b === btn);
+  });
+});
 
-      document
-        .querySelectorAll(
-          "[data-sign]"
-        )
-        .forEach(
-          b =>
-            b.classList.toggle(
-              "active",
-              b === btn
-            )
-        );
+document.getElementById("rangeGroup").addEventListener("click", e => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
 
+  document.querySelectorAll("#rangeGroup button").forEach(b => {
+    b.classList.toggle("active", b === btn);
+  });
 
-      const negative =
-        state.sign === "negative";
+  state.custom = btn.dataset.custom === "true";
+  customRangeEl.classList.toggle("show", state.custom);
 
+  if (!state.custom) {
+    state.min = Number(btn.dataset.min);
+    state.max = Number(btn.dataset.max);
+  }
+});
 
-      document
-        .querySelectorAll(
-          "#typeGroup button"
-        )
-        .forEach(
-          b =>
-            b.disabled = negative
-        );
+rollBtn.addEventListener("click", () => roll("button"));
 
+saveLastNoteBtn.addEventListener("click", () => {
+  const extra = noteInputEl.value.trim();
 
-      typeHintEl.textContent =
-        negative
-          ? "（负向事件不区分类型）"
-          : "";
+  if (!extra) {
+    noteHintEl.textContent = "先在上面的输入框里写一点备注。";
+    return;
+  }
 
-    }
-  );
+  const last = getLatestRecord();
 
+  if (!last) {
+    noteHintEl.textContent = "还没有可以补充备注的记录。";
+    return;
+  }
 
-
-document
-  .getElementById("typeGroup")
-  .addEventListener(
-    "click",
-    e => {
-
-      const btn =
-        e.target.closest(
-          "button[data-type]"
-        );
-
-
-      if (
-        !btn
-        ||
-        btn.disabled
-      ) return;
-
-
-      state.type =
-        btn.dataset.type;
-
-
-      document
-        .querySelectorAll(
-          "[data-type]"
-        )
-        .forEach(
-          b =>
-            b.classList.toggle(
-              "active",
-              b === btn
-            )
-        );
-
-    }
-  );
-
-
-
-document
-  .getElementById("rangeGroup")
-  .addEventListener(
-    "click",
-    e => {
-
-      const btn =
-        e.target.closest("button");
-
-
-      if (!btn) return;
-
-
-      document
-        .querySelectorAll(
-          "#rangeGroup button"
-        )
-        .forEach(
-          b =>
-            b.classList.toggle(
-              "active",
-              b === btn
-            )
-        );
-
-
-      state.custom =
-        btn.dataset.custom === "true";
-
-
-      customRangeEl
-        .classList
-        .toggle(
-          "show",
-          state.custom
-        );
-
-
-      if (!state.custom) {
-
-        state.min =
-          Number(btn.dataset.min);
-
-        state.max =
-          Number(btn.dataset.max);
-
-      }
-
-    }
-  );
-
-
-
-document
-  .getElementById("rollBtn")
-  .addEventListener(
-    "click",
-    () => roll("button")
-  );
-
-
+  last.note = last.note ? `${last.note}\n${extra}` : extra;
+  saveRecords();
+  noteInputEl.value = "";
+  noteHintEl.textContent = "已补充到上一次记录。";
+  render();
+});
 
 function handleMotion(event) {
+  if (!state.motionActive || state.isRolling) return;
 
-  const a =
-    event.accelerationIncludingGravity;
-
-
+  const a = event.accelerationIncludingGravity;
   if (!a) return;
 
-
   const current = {
-
     x: a.x || 0,
-
     y: a.y || 0,
-
     z: a.z || 0
-
   };
 
-
   if (state.lastMotion) {
-
     const delta =
+      Math.abs(current.x - state.lastMotion.x) +
+      Math.abs(current.y - state.lastMotion.y) +
+      Math.abs(current.z - state.lastMotion.z);
 
-      Math.abs(
-        current.x
-        -
-        state.lastMotion.x
-      )
+    const now = Date.now();
 
-      +
-
-      Math.abs(
-        current.y
-        -
-        state.lastMotion.y
-      )
-
-      +
-
-      Math.abs(
-        current.z
-        -
-        state.lastMotion.z
-      );
-
-
-    const now =
-      Date.now();
-
-
-    if (
-      delta > 24
-      &&
-      now - state.lastShakeAt
-      >
-      1500
-    ) {
-
-      state.lastShakeAt =
-        now;
-
+    if (delta > 24 && now - state.lastShakeAt > 1700) {
+      state.lastShakeAt = now;
       roll("shake");
-
     }
-
   }
 
-
-  state.lastMotion =
-    current;
-
+  state.lastMotion = current;
 }
 
+function startMotionListener() {
+  if (state.motionActive) return;
 
+  window.addEventListener("devicemotion", handleMotion);
+  state.motionActive = true;
+  state.lastMotion = null;
+  updateMotionButton();
+}
 
-async function enableMotion() {
+function stopMotionListener() {
+  window.removeEventListener("devicemotion", handleMotion);
+  state.motionActive = false;
+  state.lastMotion = null;
+  updateMotionButton();
+}
 
-  if (
-    !("DeviceMotionEvent" in window)
-  ) {
-
-    resultTextEl.textContent =
-      "这个浏览器没有动作传感器接口，可以继续使用抽奖按钮。";
-
+function updateMotionButton() {
+  if (!("DeviceMotionEvent" in window)) {
+    motionBtn.textContent = "📵 此设备不支持摇一摇";
+    motionBtn.disabled = true;
     return;
-
   }
 
+  motionBtn.disabled = false;
+
+  if (state.motionActive) {
+    motionBtn.textContent = "✅ 摇一摇：开启（点此关闭）";
+    return;
+  }
+
+  if (!state.motionWanted) {
+    motionBtn.textContent = "📱 摇一摇：关闭（点此开启）";
+    return;
+  }
+
+  if (state.motionPermissionNeeded) {
+    motionBtn.textContent = "📱 点击授权摇一摇";
+    return;
+  }
+
+  motionBtn.textContent = "📱 摇一摇：开启中";
+}
+
+async function enableMotionFromUserGesture() {
+  if (!("DeviceMotionEvent" in window)) {
+    updateMotionButton();
+    return;
+  }
 
   try {
+    if (typeof DeviceMotionEvent.requestPermission === "function") {
+      const permission = await DeviceMotionEvent.requestPermission();
 
-    if (
-      typeof DeviceMotionEvent
-        .requestPermission
-      ===
-      "function"
-    ) {
-
-      const permission =
-        await DeviceMotionEvent
-          .requestPermission();
-
-
-      if (
-        permission !== "granted"
-      ) {
-
-        resultTextEl.textContent =
-          "没有获得动作传感器权限。";
-
+      if (permission !== "granted") {
+        state.motionPermissionNeeded = true;
+        state.motionWanted = false;
+        saveSettings();
+        updateMotionButton();
+        resultTextEl.textContent = "没有获得动作传感器权限，可以继续使用抽奖按钮。";
         return;
-
       }
-
     }
 
-
-    if (!state.motionEnabled) {
-
-      window.addEventListener(
-        "devicemotion",
-        handleMotion
-      );
-
-      state.motionEnabled =
-        true;
-
-    }
-
-
-    motionBtn.textContent =
-      "✅ 摇一摇已启用";
-
-
-    resultTextEl.textContent =
-      "摇一摇已启用。现在摇动手机即可抽奖。";
-
-
+    state.motionPermissionNeeded = false;
+    state.motionWanted = true;
+    saveSettings();
+    startMotionListener();
+    resultTextEl.textContent = "摇一摇已开启。再点一次同一个按钮即可关闭。";
   } catch (err) {
-
-    resultTextEl.textContent =
-      `无法启用摇一摇：${err.message}`;
-
+    resultTextEl.textContent = `无法启用摇一摇：${err.message}`;
   }
-
 }
 
+motionBtn.addEventListener("click", async () => {
+  if (state.motionActive) {
+    state.motionWanted = false;
+    saveSettings();
+    stopMotionListener();
+    resultTextEl.textContent = "摇一摇已关闭。需要时再点一次即可开启。";
+    return;
+  }
 
+  state.motionWanted = true;
+  saveSettings();
+  await enableMotionFromUserGesture();
+});
 
-motionBtn.addEventListener(
-  "click",
-  enableMotion
-);
+function initializeMotion() {
+  if (!("DeviceMotionEvent" in window)) {
+    updateMotionButton();
+    return;
+  }
 
+  if (!state.motionWanted) {
+    updateMotionButton();
+    return;
+  }
 
+  // iPhone / iPad Safari 必须由用户点击触发权限请求，不能自动弹窗。
+  if (typeof DeviceMotionEvent.requestPermission === "function") {
+    state.motionPermissionNeeded = true;
+    updateMotionButton();
+    return;
+  }
 
-document
-  .getElementById("exportBtn")
-  .addEventListener(
-    "click",
-    () => {
+  // 不需要显式权限请求的浏览器：默认直接开启。
+  startMotionListener();
+}
 
-      const blob =
-        new Blob(
-          [
-            JSON.stringify(
-              records,
-              null,
-              2
-            )
-          ],
-          {
-            type:
-              "application/json"
-          }
-        );
-
-
-      const url =
-        URL.createObjectURL(blob);
-
-
-      const a =
-        document.createElement("a");
-
-
-      a.href =
-        url;
-
-
-      a.download =
-        `random-reward-backup-${localDateKey()}.json`;
-
-
-      a.click();
-
-
-      URL.revokeObjectURL(url);
-
-    }
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const blob = new Blob(
+    [JSON.stringify(records, null, 2)],
+    { type: "application/json" }
   );
 
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `random-reward-backup-${localDateKey()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
 
+document.getElementById("importFile").addEventListener("change", async e => {
+  const file = e.target.files?.[0];
+  if (!file) return;
 
-document
-  .getElementById("importFile")
-  .addEventListener(
-    "change",
-    async e => {
+  try {
+    const imported = JSON.parse(await file.text());
 
-      const file =
-        e.target.files?.[0];
-
-
-      if (!file) return;
-
-
-      try {
-
-        const imported =
-          JSON.parse(
-            await file.text()
-          );
-
-
-        if (
-          !Array.isArray(imported)
-        ) {
-
-          throw new Error(
-            "文件格式不正确"
-          );
-
-        }
-
-
-        const valid =
-
-          imported.filter(
-            r =>
-              r
-              &&
-              Number.isFinite(
-                Number(r.value)
-              )
-              &&
-              r.timestamp
-          );
-
-
-        const byId =
-          new Map(
-            records.map(
-              r => [r.id, r]
-            )
-          );
-
-
-        valid.forEach(
-          r =>
-            byId.set(
-              r.id
-              ||
-              `${r.timestamp}-${r.value}`,
-              r
-            )
-        );
-
-
-        records =
-          [...byId.values()];
-
-
-        saveRecords();
-
-        render();
-
-
-        resultTextEl.textContent =
-          `已导入 ${valid.length} 条记录。`;
-
-
-      } catch (err) {
-
-        resultTextEl.textContent =
-          `导入失败：${err.message}`;
-
-      }
-
-
-      e.target.value =
-        "";
-
+    if (!Array.isArray(imported)) {
+      throw new Error("文件格式不正确");
     }
-  );
 
+    const valid = imported.filter(
+      r => r && Number.isFinite(Number(r.value)) && r.timestamp
+    );
 
+    const byId = new Map(records.map(r => [r.id, r]));
 
-document
-  .getElementById("clearBtn")
-  .addEventListener(
-    "click",
-    () => {
+    valid.forEach(r => {
+      const key = r.id || `${r.timestamp}-${r.value}`;
+      byId.set(key, {
+        ...r,
+        note: typeof r.note === "string" ? r.note : ""
+      });
+    });
 
-      const ok =
-        confirm(
-          "确定清空全部记录吗？建议先导出备份。"
-        );
+    records = [...byId.values()];
+    saveRecords();
+    render();
+    resultTextEl.textContent = `已导入 ${valid.length} 条记录。`;
+  } catch (err) {
+    resultTextEl.textContent = `导入失败：${err.message}`;
+  }
 
+  e.target.value = "";
+});
 
-      if (!ok) return;
+document.getElementById("clearBtn").addEventListener("click", () => {
+  const ok = confirm("确定清空全部记录吗？建议先导出备份。");
+  if (!ok) return;
 
-
-      records = [];
-
-
-      saveRecords();
-
-
-      scoreEl.textContent =
-        "--";
-
-
-      resultTextEl.textContent =
-        "记录已清空。";
-
-
-      render();
-
-    }
-  );
-
-
+  records = [];
+  saveRecords();
+  scoreEl.textContent = "--";
+  resultTextEl.textContent = "记录已清空。";
+  render();
+});
 
 render();
-
+initializeMotion();
 </script>
-
 </body>
 </html>
