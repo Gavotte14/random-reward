@@ -143,8 +143,11 @@
     }
 
     textarea {
-      min-height: 82px;
+      min-height: 48px;
+      height: 48px;
+      max-height: 72px;
       resize: vertical;
+      line-height: 1.35;
     }
 
     .note-tools {
@@ -301,16 +304,17 @@
 
       <div class="section">
         <div class="label">备注（可选）</div>
-        <textarea id="noteInput" maxlength="500" placeholder="例如：开始看 BRD8 文献 / 今天 23:30 前睡觉"></textarea>
+        <textarea id="noteInput" rows="2" maxlength="500" placeholder="例如：开始整理资料 / 今天早点睡"></textarea>
         <div class="note-tools">
           <button class="note-action" id="saveLastNoteBtn">补充到上一次记录</button>
+          <button class="note-action" id="deleteLastBtn">清除上一条</button>
           <span class="note-hint" id="noteHint">直接抽奖时，这里的文字会自动保存到本次记录。</span>
         </div>
       </div>
 
       <div class="big-actions">
         <button class="action primary" id="rollBtn">🎲 抽一次</button>
-        <button class="action" id="motionBtn">📱 摇一摇：准备中</button>
+        <button class="action" id="motionBtn">✅ 摇一摇：开启（点此关闭）</button>
       </div>
 
       <div class="history-head">
@@ -333,17 +337,6 @@
 
 <script>
 const STORAGE_KEY = "randomRewardRecordsV1";
-const SETTINGS_KEY = "randomRewardSettingsV1";
-
-function loadSettings() {
-  try {
-    return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") || {};
-  } catch {
-    return {};
-  }
-}
-
-const savedSettings = loadSettings();
 
 const state = {
   sign: "positive",
@@ -351,14 +344,20 @@ const state = {
   min: 1,
   max: 50,
   custom: false,
-  isRolling: false,
 
-  // V1.1：首次使用默认希望开启摇一摇。
-  motionWanted: savedSettings.motionWanted ?? true,
+  buttonRolling: false,
+
+  // V1.2：默认直接开启摇一摇；关闭状态不跨刷新保存。
   motionActive: false,
-  motionPermissionNeeded: false,
-  lastShakeAt: 0,
-  lastMotion: null
+  lastMotion: null,
+
+  // 连续摇动会维持滚动动画；停止一小段时间后才真正开奖。
+  shakeRolling: false,
+  shakeContext: null,
+  shakeAnimationTimer: null,
+  shakeStopTimer: null,
+  lastSignificantMotionAt: 0,
+  shakeCooldownUntil: 0
 };
 
 let records = loadRecords();
@@ -377,6 +376,7 @@ const rollBtn = document.getElementById("rollBtn");
 const noteInputEl = document.getElementById("noteInput");
 const noteHintEl = document.getElementById("noteHint");
 const saveLastNoteBtn = document.getElementById("saveLastNoteBtn");
+const deleteLastBtn = document.getElementById("deleteLastBtn");
 
 function loadRecords() {
   try {
@@ -389,13 +389,6 @@ function loadRecords() {
 
 function saveRecords() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-}
-
-function saveSettings() {
-  localStorage.setItem(
-    SETTINGS_KEY,
-    JSON.stringify({ motionWanted: state.motionWanted })
-  );
 }
 
 function localDateKey(date = new Date()) {
@@ -457,48 +450,36 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function animateNumber(range) {
+function captureRollContext() {
+  const range = currentRange();
+
+  return {
+    min: range.min,
+    max: range.max,
+    sign: state.sign,
+    type: state.sign === "negative" ? "negative" : state.type,
+    note: noteInputEl.value.trim()
+  };
+}
+
+function previewValue(context) {
+  const raw = randomIntInclusive(context.min, context.max);
+  return context.sign === "negative" ? -raw : raw;
+}
+
+function beginRollingDisplay(message) {
   scoreEl.classList.remove("pop");
   scoreEl.classList.add("rolling");
-  resultTextEl.textContent = "正在抽取……";
+  resultTextEl.textContent = message;
+}
 
-  const steps = 12;
-
-  for (let i = 0; i < steps; i++) {
-    const raw = randomIntInclusive(range.min, range.max);
-    const preview = state.sign === "negative" ? -raw : raw;
-    scoreEl.textContent = signed(preview);
-
-    // 前面快一点，最后几下稍微放慢。
-    await sleep(45 + i * 5);
-  }
-
+function endRollingDisplay() {
   scoreEl.classList.remove("rolling");
 }
 
-async function roll(source = "button") {
-  if (state.isRolling) return;
-
-  let range;
-
-  try {
-    range = currentRange();
-  } catch (err) {
-    resultTextEl.textContent = err.message;
-    return;
-  }
-
-  state.isRolling = true;
-  rollBtn.disabled = true;
-
-  // 抽奖前先把备注“拍照”下来，避免动画期间修改造成混乱。
-  const note = noteInputEl.value.trim();
-
-  await animateNumber(range);
-
-  const raw = randomIntInclusive(range.min, range.max);
-  const value = state.sign === "negative" ? -raw : raw;
-  const type = state.sign === "negative" ? "negative" : state.type;
+function commitResult(context, source) {
+  const raw = randomIntInclusive(context.min, context.max);
+  const value = context.sign === "negative" ? -raw : raw;
   const now = new Date();
 
   const record = {
@@ -507,30 +488,30 @@ async function roll(source = "button") {
       : `${Date.now()}-${Math.random()}`,
     timestamp: now.toISOString(),
     localDate: localDateKey(now),
-    sign: state.sign,
-    type,
-    min: range.min,
-    max: range.max,
+    sign: context.sign,
+    type: context.type,
+    min: context.min,
+    max: context.max,
     value,
     source,
-    note
+    note: context.note
   };
 
   records.push(record);
   saveRecords();
 
   scoreEl.textContent = signed(value);
-  resultTextEl.textContent = note
-    ? `${typeName(type)} · ${range.min}–${range.max} · 已保存备注`
-    : `${typeName(type)} · ${range.min}–${range.max}`;
+  resultTextEl.textContent = context.note
+    ? `${typeName(context.type)} · ${context.min}–${context.max} · 已保存备注`
+    : `${typeName(context.type)} · ${context.min}–${context.max}`;
 
   scoreEl.classList.remove("pop");
   void scoreEl.offsetWidth;
   scoreEl.classList.add("pop");
 
-  if (note) {
+  if (context.note) {
     noteInputEl.value = "";
-    noteHintEl.textContent = "备注已随本次记录保存。也可以继续输入，再补充到上一次记录。";
+    noteHintEl.textContent = "备注已随本次记录保存。再次输入后，可用“补充到上一次记录”直接替换上一条备注。";
   } else {
     noteHintEl.textContent = "如果刚刚才想到备注，可以现在输入，再点“补充到上一次记录”。";
   }
@@ -539,9 +520,100 @@ async function roll(source = "button") {
     navigator.vibrate(45);
   }
 
-  state.isRolling = false;
-  rollBtn.disabled = false;
   render();
+}
+
+async function roll(source = "button") {
+  if (state.buttonRolling || state.shakeRolling) return;
+
+  let context;
+
+  try {
+    context = captureRollContext();
+  } catch (err) {
+    resultTextEl.textContent = err.message;
+    return;
+  }
+
+  state.buttonRolling = true;
+  rollBtn.disabled = true;
+
+  beginRollingDisplay("正在抽取……");
+
+  const steps = 12;
+  for (let i = 0; i < steps; i++) {
+    scoreEl.textContent = signed(previewValue(context));
+    await sleep(45 + i * 5);
+  }
+
+  endRollingDisplay();
+  commitResult(context, source);
+
+  state.buttonRolling = false;
+  rollBtn.disabled = false;
+}
+
+function startShakeRoll() {
+  if (state.shakeRolling || state.buttonRolling || !state.motionActive) return;
+
+  let context;
+
+  try {
+    context = captureRollContext();
+  } catch (err) {
+    resultTextEl.textContent = err.message;
+    return;
+  }
+
+  state.shakeRolling = true;
+  state.shakeContext = context;
+  rollBtn.disabled = true;
+
+  beginRollingDisplay("摇动中……停止摇动后开奖");
+  scoreEl.textContent = signed(previewValue(context));
+
+  state.shakeAnimationTimer = setInterval(() => {
+    if (!state.shakeRolling || !state.shakeContext) return;
+    scoreEl.textContent = signed(previewValue(state.shakeContext));
+  }, 65);
+}
+
+function scheduleShakeFinish() {
+  clearTimeout(state.shakeStopTimer);
+
+  state.shakeStopTimer = setTimeout(() => {
+    if (!state.shakeRolling) return;
+
+    const quietFor = Date.now() - state.lastSignificantMotionAt;
+
+    // 若仍在持续摇动，继续等待真正停下来。
+    if (quietFor < 480) {
+      scheduleShakeFinish();
+      return;
+    }
+
+    finishShakeRoll();
+  }, 500);
+}
+
+function finishShakeRoll() {
+  if (!state.shakeRolling || !state.shakeContext) return;
+
+  clearInterval(state.shakeAnimationTimer);
+  clearTimeout(state.shakeStopTimer);
+  state.shakeAnimationTimer = null;
+  state.shakeStopTimer = null;
+
+  const context = state.shakeContext;
+  state.shakeContext = null;
+  state.shakeRolling = false;
+
+  endRollingDisplay();
+  commitResult(context, "shake");
+
+  // 避免开奖后手机自然回弹立刻触发下一次。
+  state.shakeCooldownUntil = Date.now() + 650;
+  rollBtn.disabled = false;
 }
 
 function getLatestRecord() {
@@ -571,6 +643,7 @@ function render() {
   allTotalEl.textContent = allTotal === 0 ? "0" : signed(allTotal);
 
   saveLastNoteBtn.disabled = records.length === 0;
+  deleteLastBtn.disabled = records.length === 0;
 
   const latest = [...records]
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
@@ -665,9 +738,9 @@ document.getElementById("rangeGroup").addEventListener("click", e => {
 rollBtn.addEventListener("click", () => roll("button"));
 
 saveLastNoteBtn.addEventListener("click", () => {
-  const extra = noteInputEl.value.trim();
+  const replacement = noteInputEl.value.trim();
 
-  if (!extra) {
+  if (!replacement) {
     noteHintEl.textContent = "先在上面的输入框里写一点备注。";
     return;
   }
@@ -679,15 +752,36 @@ saveLastNoteBtn.addEventListener("click", () => {
     return;
   }
 
-  last.note = last.note ? `${last.note}\n${extra}` : extra;
+  // V1.2：不是追加，而是直接替换上一条记录现有备注。
+  last.note = replacement;
   saveRecords();
   noteInputEl.value = "";
-  noteHintEl.textContent = "已补充到上一次记录。";
+  noteHintEl.textContent = "已替换上一次记录的备注。";
+  render();
+});
+
+deleteLastBtn.addEventListener("click", () => {
+  const last = getLatestRecord();
+
+  if (!last) {
+    noteHintEl.textContent = "还没有可以清除的记录。";
+    return;
+  }
+
+  const ok = confirm(`确定清除上一条记录 ${signed(Number(last.value))} 吗？`);
+  if (!ok) return;
+
+  records = records.filter(r => r !== last);
+  saveRecords();
+
+  scoreEl.textContent = "--";
+  resultTextEl.textContent = "已清除上一条记录。";
+  noteHintEl.textContent = "上一条记录已删除。";
   render();
 });
 
 function handleMotion(event) {
-  if (!state.motionActive || state.isRolling) return;
+  if (!state.motionActive || state.buttonRolling) return;
 
   const a = event.accelerationIncludingGravity;
   if (!a) return;
@@ -706,9 +800,14 @@ function handleMotion(event) {
 
     const now = Date.now();
 
-    if (delta > 24 && now - state.lastShakeAt > 1700) {
-      state.lastShakeAt = now;
-      roll("shake");
+    if (delta > 24 && now >= state.shakeCooldownUntil) {
+      state.lastSignificantMotionAt = now;
+
+      if (!state.shakeRolling) {
+        startShakeRoll();
+      }
+
+      scheduleShakeFinish();
     }
   }
 
@@ -725,6 +824,19 @@ function startMotionListener() {
 }
 
 function stopMotionListener() {
+  if (state.shakeRolling) {
+    clearInterval(state.shakeAnimationTimer);
+    clearTimeout(state.shakeStopTimer);
+    state.shakeAnimationTimer = null;
+    state.shakeStopTimer = null;
+    state.shakeRolling = false;
+    state.shakeContext = null;
+    endRollingDisplay();
+    rollBtn.disabled = false;
+    scoreEl.textContent = "--";
+    resultTextEl.textContent = "摇一摇已关闭，本次未生成结果。";
+  }
+
   window.removeEventListener("devicemotion", handleMotion);
   state.motionActive = false;
   state.lastMotion = null;
@@ -739,67 +851,22 @@ function updateMotionButton() {
   }
 
   motionBtn.disabled = false;
-
-  if (state.motionActive) {
-    motionBtn.textContent = "✅ 摇一摇：开启（点此关闭）";
-    return;
-  }
-
-  if (!state.motionWanted) {
-    motionBtn.textContent = "📱 摇一摇：关闭（点此开启）";
-    return;
-  }
-
-  if (state.motionPermissionNeeded) {
-    motionBtn.textContent = "📱 点击授权摇一摇";
-    return;
-  }
-
-  motionBtn.textContent = "📱 摇一摇：开启中";
+  motionBtn.textContent = state.motionActive
+    ? "✅ 摇一摇：开启（点此关闭）"
+    : "📱 摇一摇：关闭（点此开启）";
 }
 
-async function enableMotionFromUserGesture() {
-  if (!("DeviceMotionEvent" in window)) {
-    updateMotionButton();
-    return;
-  }
-
-  try {
-    if (typeof DeviceMotionEvent.requestPermission === "function") {
-      const permission = await DeviceMotionEvent.requestPermission();
-
-      if (permission !== "granted") {
-        state.motionPermissionNeeded = true;
-        state.motionWanted = false;
-        saveSettings();
-        updateMotionButton();
-        resultTextEl.textContent = "没有获得动作传感器权限，可以继续使用抽奖按钮。";
-        return;
-      }
-    }
-
-    state.motionPermissionNeeded = false;
-    state.motionWanted = true;
-    saveSettings();
-    startMotionListener();
-    resultTextEl.textContent = "摇一摇已开启。再点一次同一个按钮即可关闭。";
-  } catch (err) {
-    resultTextEl.textContent = `无法启用摇一摇：${err.message}`;
-  }
-}
-
-motionBtn.addEventListener("click", async () => {
+motionBtn.addEventListener("click", () => {
   if (state.motionActive) {
-    state.motionWanted = false;
-    saveSettings();
     stopMotionListener();
-    resultTextEl.textContent = "摇一摇已关闭。需要时再点一次即可开启。";
+    if (!state.shakeRolling) {
+      resultTextEl.textContent = "摇一摇已关闭。需要时再点一次即可开启。";
+    }
     return;
   }
 
-  state.motionWanted = true;
-  saveSettings();
-  await enableMotionFromUserGesture();
+  startMotionListener();
+  resultTextEl.textContent = "摇一摇已开启。持续摇动时数字会一直滚动，停止后开奖。";
 });
 
 function initializeMotion() {
@@ -808,19 +875,7 @@ function initializeMotion() {
     return;
   }
 
-  if (!state.motionWanted) {
-    updateMotionButton();
-    return;
-  }
-
-  // iPhone / iPad Safari 必须由用户点击触发权限请求，不能自动弹窗。
-  if (typeof DeviceMotionEvent.requestPermission === "function") {
-    state.motionPermissionNeeded = true;
-    updateMotionButton();
-    return;
-  }
-
-  // 不需要显式权限请求的浏览器：默认直接开启。
+  // V1.2：不处理 iPhone 的显式权限流程，支持的设备打开网页就直接开启。
   startMotionListener();
 }
 
